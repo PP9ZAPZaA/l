@@ -1,0 +1,18 @@
+{
+  "name": "datacenter-access-system",
+  "version": "1.0.0",
+  "description": "Data Center Access & Equipment Tracking Management System",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx serve .",
+    "dev": "npx serve ."
+  },
+  "keywords": [
+    "datacenter",
+    "access-control",
+    "equipment-audit",
+    "flowchart-erd"
+  ],
+  "author": "Antigravity AI",
+  "license": "MIT"
+}
