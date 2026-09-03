@@ -1,127 +1,74 @@
 /* ===================================================
-   Data Center Access & Equipment Tracking System - JS Engine
-   Offline-Ready, Zero External Network Dependency Engine
-   with Guaranteed LocalStorage Persistence & Toast Feedback
+   Data Center Access & Equipment Tracking System - Supabase Engine
    =================================================== */
 
-const STORAGE_KEY = "DC_ACCESS_MASTER_DB_V2";
+const SUPABASE_URL = 'https://cbdoskkkrpzcutzvcjzh.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_drjCU5YC1EyKisnonx5uCA_DB085tdZ';
+const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 const SESSION_KEY = "DC_ACCESS_CURRENT_USER_V2";
 
-// Initial Default Seed Database matching ERD Schema
-const DEFAULT_DB = {
-  USERS: [
-    { user_id: 101, email: "requester@dc.com", password: "pass123", name: "สมชาย ใจดี", department: "External Vendor (Network Co.)", role: "REQUESTER" },
-    { user_id: 102, email: "supervisor@dc.com", password: "pass123", name: "คุณสุรชัย IT Manager", department: "IT Infrastructure Dept", role: "SUPERVISOR" },
-    { user_id: 103, email: "gatekeeper@dc.com", password: "pass123", name: "สมศักดิ์ Gatekeeper", department: "Data Center Security Guard", role: "GATEKEEPER" },
-    { user_id: 104, email: "admin@dc.com", password: "pass123", name: "วิชัย Security Auditor", department: "Internal Cyber Audit Team", role: "AUDITOR" }
-  ],
-
-  REQUESTS: [
-    {
-      request_id: 1001,
-      requester_id: 101,
-      purpose: "เข้าติดตั้ง Switch Cisco 24-Port ใน Rack A-04",
-      purpose_category: "GENERAL_SERVICE",
-      status: "APPROVED",
-      created_at: "2026-07-23 08:00:00",
-      timeframe: "23 ก.ค. 2026 (09:00 - 17:00 น.)"
-    },
-    {
-      request_id: 1002,
-      requester_id: 101,
-      purpose: "สำเนาและรีเซ็ตการตั้งค่า Server Storage B-02 (เงื่อนไขพิเศษ)",
-      purpose_category: "SENSITIVE_DATA_DELETE",
-      status: "PENDING",
-      created_at: "2026-07-23 08:20:00",
-      timeframe: "23 ก.ค. 2026 (10:00 - 15:00 น.)"
-    }
-  ],
-
-  VISITORS: [
-    { visitor_id: 1, request_id: 1001, visitor_name: "สมชาย ใจดี", employee_id: "EMP-90812" },
-    { visitor_id: 2, request_id: 1001, visitor_name: "กิตติพงษ์ ช่างเทคนิค", employee_id: "EMP-90813" },
-    { visitor_id: 3, request_id: 1002, visitor_name: "สมชาย ใจดี", employee_id: "EMP-90812" }
-  ],
-
-  EQUIPMENTS: [
-    { equip_id: 501, request_id: 1001, item_name: "Cisco Catalyst Switch 24P (S/N: CS-88129)", quantity_in: 2, quantity_out: 0, status: "WAITING_ENTRY" },
-    { equip_id: 502, request_id: 1001, item_name: "สาย UTP Cat6 Patch Cable (กล่อง)", quantity_in: 5, quantity_out: 0, status: "WAITING_ENTRY" },
-    { equip_id: 503, request_id: 1002, item_name: "External SSD Hard Drive 2TB (S/N: SSD-9921)", quantity_in: 1, quantity_out: 0, status: "WAITING_ENTRY" }
-  ],
-
-  APPROVALS: [
-    { approval_id: 1, request_id: 1001, approver_id: 102, role_type: "IT Supervisor", decision: "APPROVED", remark: "อนุมัติให้เข้าตามเวลา Service ทั่วไป" }
-  ],
-
-  ACCESS_LOGS: [],
-  CHECKOUT_AUDITS: []
+let db = {
+  users: [],
+  requests: [],
+  visitors: [],
+  equipments: [],
+  approvals: [],
+  access_logs: [],
+  checkout_audits: []
 };
 
-// Memory fallback if browser restricts local storage on file:// protocol
-let inMemoryDb = null;
-let db = loadDatabase();
 let currentUser = null;
 let currentTab = "create-request";
-let selectedErdTable = "USERS";
+let selectedErdTable = "users";
+let isRegisterMode = false;
 
-// Toast Notification Popup Helper
 function showToast(message) {
   const toast = document.getElementById("toast-notification");
   const msgEl = document.getElementById("toast-message");
   if (!toast || !msgEl) return;
-  
   msgEl.textContent = message;
   toast.classList.remove("hidden");
-  
-  setTimeout(() => {
-    toast.classList.add("hidden");
-  }, 3000);
+  setTimeout(() => { toast.classList.add("hidden"); }, 3000);
 }
 
-// Load DB safely from LocalStorage with Memory Fallback
-function loadDatabase() {
+// โหลดข้อมูลทั้งหมดจากตารางพิมพ์เล็กใน Supabase
+async function loadDatabaseFromSupabase() {
   try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (data) return JSON.parse(data);
-  } catch (e) {
-    console.warn("LocalStorage access restricted, using in-memory store", e);
-    if (inMemoryDb) return inMemoryDb;
-  }
-  const initDb = JSON.parse(JSON.stringify(DEFAULT_DB));
-  saveDatabaseDirect(initDb);
-  return initDb;
-}
+    const [usersRes, reqsRes, visRes, eqRes, appRes, logsRes, auditsRes] = await Promise.all([
+      _supabase.from('users').select('*'),
+      _supabase.from('requests').select('*'),
+      _supabase.from('visitors').select('*'),
+      _supabase.from('equipments').select('*'),
+      _supabase.from('approvals').select('*'),
+      _supabase.from('access_logs').select('*'),
+      _supabase.from('checkout_audits').select('*')
+    ]);
 
-// Save DB safely to LocalStorage
-function saveDatabase() {
-  saveDatabaseDirect(db);
-  showToast("💾 บันทึกข้อมูลลงในฐานข้อมูลเรียบร้อยแล้ว!");
-}
+    db.users = usersRes.data || [];
+    db.requests = reqsRes.data || [];
+    db.visitors = visRes.data || [];
+    db.equipments = eqRes.data || [];
+    db.approvals = appRes.data || [];
+    db.access_logs = logsRes.data || [];
+    db.checkout_audits = auditsRes.data || [];
 
-function saveDatabaseDirect(dataObj) {
-  inMemoryDb = dataObj;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(dataObj));
-  } catch (e) {
-    console.warn("Could not save to LocalStorage", e);
+    console.log("Database synced from Supabase successfully!");
+  } catch (err) {
+    console.error("Error loading from Supabase:", err);
   }
 }
 
-function resetDemoData() {
-  if (confirm("คุณต้องการรีเซ็ตข้อมูลตัวอย่างทั้งหมดกลับเป็นค่าเริ่มต้นหรือไม่?")) {
-    db = JSON.parse(JSON.stringify(DEFAULT_DB));
-    saveDatabaseDirect(db);
-    showToast("🔄 รีเซ็ตฐานข้อมูลเรียบร้อยแล้ว!");
-    if (currentUser) applyUserSession(currentUser);
-  }
+async function resetDemoData() {
+  alert("ระบบใช้งานฐานข้อมูล Supabase บนคลาวด์แล้ว ข้อมูลจะถูกจัดการผ่านตารางออนไลน์จริง");
 }
 
-// Page Initialization
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   renderVisitorInputRows();
   renderEquipmentInputRows();
 
-  // Check saved user session
+  await loadDatabaseFromSupabase();
+
   try {
     const savedUser = sessionStorage.getItem(SESSION_KEY);
     if (savedUser) {
@@ -134,26 +81,104 @@ document.addEventListener("DOMContentLoaded", () => {
   showLoginScreen();
 });
 
-// Authentication Engine
-function fillDemoAccount(email, pass) {
-  document.getElementById("loginEmail").value = email;
-  document.getElementById("loginPassword").value = pass;
+function toggleAuthMode() {
+  isRegisterMode = !isRegisterMode;
+  
+  const titleEl = document.getElementById("authFormTitle");
+  const subtitleEl = document.getElementById("authFormSubtitle");
+  const btnEl = document.getElementById("authSubmitBtn");
+  const toggleTextEl = document.getElementById("authToggleText");
+  const nameGroup = document.getElementById("registerNameGroup");
+  const deptGroup = document.getElementById("registerDeptGroup");
+  
+  if (isRegisterMode) {
+    titleEl.textContent = "สมัครสมาชิกใหม่";
+    subtitleEl.textContent = "ลงทะเบียนเพื่อขอสิทธิ์ใช้งานระบบ Data Center";
+    btnEl.textContent = "ลงทะเบียน (Register)";
+    nameGroup.classList.remove("hidden");
+    deptGroup.classList.remove("hidden");
+    toggleTextEl.innerHTML = `มีบัญชีอยู่แล้ว? <a href="javascript:void(0);" onclick="toggleAuthMode()" class="text-cyan" style="font-weight: 600; text-decoration: underline;">เข้าสู่ระบบที่นี่</a>`;
+  } else {
+    titleEl.textContent = "เข้าสู่ระบบ";
+    subtitleEl.textContent = "BPH DATA CENTER - ระบบตรวจสอบและจัดการการเข้าห้อง";
+    btnEl.textContent = "เข้าสู่ระบบ (Log In)";
+    nameGroup.classList.add("hidden");
+    deptGroup.classList.add("hidden");
+    toggleTextEl.innerHTML = `ยังไม่มีบัญชีผู้ใช้งาน? <a href="javascript:void(0);" onclick="toggleAuthMode()" class="text-cyan" style="font-weight: 600; text-decoration: underline;">สมัครสมาชิกที่นี่</a>`;
+  }
 }
 
-function handleLogin(e) {
+async function handleAuthSubmit(e) {
   e.preventDefault();
   const email = document.getElementById("loginEmail").value.trim().toLowerCase();
   const pass = document.getElementById("loginPassword").value;
 
-  const foundUser = db.USERS.find(u => u.email.toLowerCase() === email && u.password === pass);
+  if (isRegisterMode) {
+    const name = document.getElementById("registerName").value.trim();
+    const dept = document.getElementById("registerDept").value.trim();
 
-  if (foundUser) {
-    currentUser = foundUser;
-    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentUser)); } catch(e) {}
-    applyUserSession(currentUser);
-    showToast(`🔓 ยินดีต้อนรับคุณ ${currentUser.name} (${currentUser.role})`);
+    if (!name || !dept) {
+      alert("❌ กรุณากรอกชื่อและแผนก/บริษัทให้ครบถ้วน");
+      return;
+    }
+
+    try {
+      const { data: existingUser } = await _supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (existingUser) {
+        alert("❌ อีเมลนี้ถูกใช้งานในระบบแล้ว โปรดใช้อีเมลอื่นหรือเข้าสู่ระบบ");
+        return;
+      }
+
+      const { data: newUser, error: insertError } = await _supabase
+        .from('users')
+        .insert([
+          { email: email, password: pass, name: name, department: dept, role: "REQUESTER" }
+        ])
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      await loadDatabaseFromSupabase();
+      showToast("🎉 สมัครสมาชิกสำเร็จ! กำลังเข้าสู่ระบบ...");
+      currentUser = newUser;
+      try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentUser)); } catch(e) {}
+      applyUserSession(currentUser);
+
+    } catch (err) {
+      console.error("Register Error:", err);
+      alert("❌ เกิดข้อผิดพลาดในการสมัครสมาชิก: " + err.message);
+    }
+
   } else {
-    alert("❌ อีเมลหรือรหัสผ่านไม่ถูกต้อง! โปรดเลือกใช้อีเมลตัวอย่างด้านล่าง");
+    try {
+      const { data: foundUser, error } = await _supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .eq('password', pass)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (foundUser) {
+        currentUser = foundUser;
+        try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentUser)); } catch(e) {}
+        applyUserSession(currentUser);
+        showToast(`🔓 ยินดีต้อนรับคุณ ${currentUser.name} (${currentUser.role})`);
+      } else {
+        alert("❌ อีเมลหรือรหัสผ่านไม่ถูกต้อง!");
+      }
+
+    } catch (err) {
+      console.error("Login Error:", err);
+      alert("❌ ไม่สามารถเชื่อมต่อฐานข้อมูลได้: " + err.message);
+    }
   }
 }
 
@@ -167,6 +192,12 @@ function handleLogout() {
 function showLoginScreen() {
   document.getElementById("login-screen").classList.remove("hidden");
   document.getElementById("main-app-workspace").classList.add("hidden");
+  isRegisterMode = false;
+  document.getElementById("authForm").reset();
+  const nameGroup = document.getElementById("registerNameGroup");
+  const deptGroup = document.getElementById("registerDeptGroup");
+  if(nameGroup) nameGroup.classList.add("hidden");
+  if(deptGroup) deptGroup.classList.add("hidden");
 }
 
 function applyUserSession(user) {
@@ -221,9 +252,10 @@ function applyUserSession(user) {
   else updateUI();
 }
 
-function switchTab(tabId) {
+async function switchTab(tabId) {
   currentTab = tabId;
-  
+  await loadDatabaseFromSupabase();
+
   document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
   document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
 
@@ -236,13 +268,13 @@ function switchTab(tabId) {
   updateUI();
 }
 
-// Dynamic Form Rows
 function renderVisitorInputRows() {
   const tbody = document.getElementById("visitorsTableBody");
+  if(!tbody) return;
   tbody.innerHTML = `
     <tr>
-      <td><input type="text" class="v-name" required value="สมชาย ใจดี" placeholder="ชื่อ-นามสกุล"></td>
-      <td><input type="text" class="v-id" required value="EMP-90812" placeholder="รหัสพนักงาน/บัตรประชาชน"></td>
+      <td><input type="text" class="v-name" required placeholder="ชื่อ-นามสกุล"></td>
+      <td><input type="text" class="v-id" required placeholder="รหัสพนักงาน/บัตรประชาชน"></td>
       <td><button type="button" class="btn btn-sm btn-danger" onclick="removeRow(this)">🗑️</button></td>
     </tr>
   `;
@@ -261,9 +293,10 @@ function addVisitorRow() {
 
 function renderEquipmentInputRows() {
   const tbody = document.getElementById("equipmentsTableBody");
+  if(!tbody) return;
   tbody.innerHTML = `
     <tr>
-      <td><input type="text" class="e-name" required value="Cisco Catalyst Switch 24-Port (S/N: CS-9912)" placeholder="ชื่ออุปกรณ์ และ Serial Number"></td>
+      <td><input type="text" class="e-name" required placeholder="ชื่ออุปกรณ์ และ Serial Number"></td>
       <td><input type="number" class="e-qty" required value="1" min="1"></td>
       <td><button type="button" class="btn btn-sm btn-danger" onclick="removeRow(this)">🗑️</button></td>
     </tr>
@@ -293,122 +326,136 @@ function togglePurposeWarning() {
   else box.classList.add("hidden");
 }
 
-// Create Request Handler
-function handleCreateRequest(e) {
+async function handleCreateRequest(e) {
   e.preventDefault();
 
   const category = document.getElementById("reqPurposeCategory").value;
   const detail = document.getElementById("reqPurposeDetail").value;
   const timeframe = document.getElementById("reqTimeframe").value;
 
-  const newReqId = 1000 + db.REQUESTS.length + 1;
+  try {
+    const { data: newReq, error: reqErr } = await _supabase
+      .from('requests')
+      .insert([{
+        requester_id: currentUser ? currentUser.user_id : 101,
+        purpose: `${detail} (${category})`,
+        purpose_category: category,
+        status: "PENDING",
+        timeframe: timeframe
+      }])
+      .select()
+      .single();
 
-  db.REQUESTS.push({
-    request_id: newReqId,
-    requester_id: currentUser ? currentUser.user_id : 101,
-    purpose: `${detail} (${category})`,
-    purpose_category: category,
-    status: "PENDING",
-    created_at: new Date().toLocaleString("th-TH"),
-    timeframe: timeframe
-  });
+    if (reqErr) throw reqErr;
+    const newReqId = newReq.request_id;
 
-  document.querySelectorAll("#visitorsTableBody tr").forEach(r => {
-    const name = r.querySelector(".v-name").value;
-    const empId = r.querySelector(".v-id").value;
-    if (name) {
-      db.VISITORS.push({ visitor_id: db.VISITORS.length + 1, request_id: newReqId, visitor_name: name, employee_id: empId });
+    const visitorRows = [];
+    document.querySelectorAll("#visitorsTableBody tr").forEach(r => {
+      const name = r.querySelector(".v-name").value;
+      const empId = r.querySelector(".v-id").value;
+      if (name) {
+        visitorRows.push({ request_id: newReqId, visitor_name: name, employee_id: empId });
+      }
+    });
+    if (visitorRows.length > 0) {
+      await _supabase.from('visitors').insert(visitorRows);
     }
-  });
 
-  document.querySelectorAll("#equipmentsTableBody tr").forEach(r => {
-    const itemName = r.querySelector(".e-name").value;
-    const qty = parseInt(r.querySelector(".e-qty").value) || 1;
-    if (itemName) {
-      db.EQUIPMENTS.push({ equip_id: 500 + db.EQUIPMENTS.length + 1, request_id: newReqId, item_name: itemName, quantity_in: qty, quantity_out: 0, status: "WAITING_ENTRY" });
+    const equipRows = [];
+    document.querySelectorAll("#equipmentsTableBody tr").forEach(r => {
+      const itemName = r.querySelector(".e-name").value;
+      const qty = parseInt(r.querySelector(".e-qty").value) || 1;
+      if (itemName) {
+        equipRows.push({ request_id: newReqId, item_name: itemName, quantity_in: qty, quantity_out: 0, status: "WAITING_ENTRY" });
+      }
+    });
+    if (equipRows.length > 0) {
+      await _supabase.from('equipments').insert(equipRows);
     }
-  });
 
-  saveDatabase();
-  alert(`ส่งคำร้องขออนุมัติเรียบร้อยแล้ว! รหัสคำร้องคือ #REQ-${newReqId}`);
-  switchTab("my-requests");
+    await loadDatabaseFromSupabase();
+    alert(`ส่งคำร้องขออนุมัติเรียบร้อยแล้ว! รหัสคำร้องคือ #REQ-${newReqId}`);
+    switchTab("my-requests");
+
+  } catch (err) {
+    console.error("Create Request Error:", err);
+    alert("❌ ไม่สามารถส่งคำร้องได้: " + err.message);
+  }
 }
 
-// Supervisor Approval Handler
-function approveRequest(reqId) {
-  const req = db.REQUESTS.find(r => r.request_id === reqId);
-  if (!req) return;
+async function approveRequest(reqId) {
+  try {
+    await _supabase.from('requests').update({ status: "APPROVED" }).eq('request_id', reqId);
+    await _supabase.from('approvals').insert([{
+      request_id: reqId,
+      approver_id: currentUser ? currentUser.user_id : 102,
+      role_type: "IT Supervisor",
+      decision: "APPROVED",
+      remark: "อนุมัติรายการเรียบร้อย"
+    }]);
 
-  req.status = "APPROVED";
-  db.APPROVALS.push({
-    approval_id: db.APPROVALS.length + 1,
-    request_id: reqId,
-    approver_id: currentUser ? currentUser.user_id : 102,
-    role_type: "IT Supervisor",
-    decision: "APPROVED",
-    remark: "อนุมัติรายการเรียบร้อย"
-  });
-
-  saveDatabase();
-  alert(`อนุมัติคำร้อง #REQ-${reqId} เรียบร้อยแล้ว! คำร้องพร้อมสำหรับการสแกนเข้า Data Center`);
-  updateUI();
+    await loadDatabaseFromSupabase();
+    alert(`อนุมัติคำร้อง #REQ-${reqId} เรียบร้อยแล้ว!`);
+    updateUI();
+  } catch (err) {
+    alert("❌ เกิดข้อผิดพลาด: " + err.message);
+  }
 }
 
-function rejectRequest(reqId) {
-  const req = db.REQUESTS.find(r => r.request_id === reqId);
-  if (!req) return;
-
+async function rejectRequest(reqId) {
   const reason = prompt("ระบุเหตุผลในการไม่อนุมัติ:") || "ไม่อนุมัติเนื่องจากข้อมูลไม่ครบถ้วน";
-  req.status = "REJECTED";
-  db.APPROVALS.push({
-    approval_id: db.APPROVALS.length + 1,
-    request_id: reqId,
-    approver_id: currentUser ? currentUser.user_id : 102,
-    role_type: "IT Supervisor",
-    decision: "REJECTED",
-    remark: reason
-  });
+  try {
+    await _supabase.from('requests').update({ status: "REJECTED" }).eq('request_id', reqId);
+    await _supabase.from('approvals').insert([{
+      request_id: reqId,
+      approver_id: currentUser ? currentUser.user_id : 102,
+      role_type: "IT Supervisor",
+      decision: "REJECTED",
+      remark: reason
+    }]);
 
-  saveDatabase();
-  alert(`ปฏิเสธคำร้อง #REQ-${reqId} เรียบร้อยแล้ว`);
-  updateUI();
+    await loadDatabaseFromSupabase();
+    alert(`ปฏิเสธคำร้อง #REQ-${reqId} เรียบร้อยแล้ว`);
+    updateUI();
+  } catch (err) {
+    alert("❌ เกิดข้อผิดพลาด: " + err.message);
+  }
 }
 
-// Gatekeeper Beta Code Input Scanner
 function parseRequestId(inputVal) {
   if (!inputVal) return null;
   const cleanStr = String(inputVal).replace(/[^0-9]/g, "");
   return parseInt(cleanStr) || null;
 }
 
-function processScanInByCode() {
+async function processScanInByCode() {
   const val = document.getElementById("manualCodeInput").value || document.getElementById("quickSelectScanRequest").value;
   const reqId = parseRequestId(val);
 
   if (!reqId) return alert("โปรดป้อนรหัสคำร้อง เช่น REQ-1001 หรือ 1001");
 
-  const req = db.REQUESTS.find(r => r.request_id === reqId);
+  const req = db.requests.find(r => r.request_id === reqId);
   if (!req) return alert(`ไม่พบรหัสคำร้อง #REQ-${reqId} ในระบบ!`);
 
-  if (req.status === "PENDING") return alert(`คำร้อง #REQ-${reqId} ยังอยู่ในสถานะ "รอหัวหน้าอนุมัติ" ไม่สามารถเข้าห้องได้`);
-  if (req.status === "REJECTED") return alert(`คำร้อง #REQ-${reqId} ถูกไม่อนุมัติ`);
+  if (req.status === "PENDING") return alert(`คำร้อง #REQ-${reqId} ยังอยู่ในสถานะรอหัวหน้าอนุมัติ`);
   if (req.status === "CHECKED_IN") return alert(`คำร้อง #REQ-${reqId} สแกนเข้าห้องไปแล้วเรียบร้อย`);
-  if (req.status === "CLOSED" || req.status === "FLAGGED") return alert(`คำร้อง #REQ-${reqId} ปิดรายการไปแล้ว`);
 
-  req.status = "CHECKED_IN";
-  db.ACCESS_LOGS.push({
-    log_id: db.ACCESS_LOGS.length + 1,
-    request_id: reqId,
-    entry_time: new Date().toLocaleTimeString("th-TH"),
-    exit_time: null
-  });
+  try {
+    await _supabase.from('requests').update({ status: "CHECKED_IN" }).eq('request_id', reqId);
+    await _supabase.from('access_logs').insert([{
+      request_id: reqId,
+      entry_time: new Date().toLocaleTimeString("th-TH"),
+      exit_time: null
+    }]);
+    await _supabase.from('equipments').update({ status: "INSIDE_DC" }).eq('request_id', reqId);
 
-  db.EQUIPMENTS.filter(e => e.request_id === reqId).forEach(e => e.status = "INSIDE_DC");
-
-  saveDatabase();
-  document.getElementById("manualCodeInput").value = "";
-  alert(`สแกนรหัส #REQ-${reqId} สำเร็จ! ต้อนรับผู้ปฏิบัติงานเข้าห้อง Data Center`);
-  updateUI();
+    await loadDatabaseFromSupabase();
+    document.getElementById("manualCodeInput").value = "";
+    alert(`สแกนรหัส #REQ-${reqId} สำเร็จ! ต้อนรับผู้ปฏิบัติงานเข้าห้อง Data Center`);
+    updateUI();
+  } catch (err) {
+    alert("❌ เกิดข้อผิดพลาด: " + err.message);
+  }
 }
 
 function processScanOutByCode() {
@@ -417,15 +464,15 @@ function processScanOutByCode() {
 
   if (!reqId) return alert("โปรดป้อนรหัสคำร้อง เช่น REQ-1001 หรือ 1001");
 
-  const req = db.REQUESTS.find(r => r.request_id === reqId);
+  const req = db.requests.find(r => r.request_id === reqId);
   if (!req) return alert(`ไม่พบรหัสคำร้อง #REQ-${reqId} ในระบบ!`);
-  if (req.status !== "CHECKED_IN") return alert(`คำร้อง #REQ-${reqId} ไม่ได้อยู่ในสถานะกำลังปฏิบัติงานในห้อง`);
+  if (req.status !== "CHECKED_IN") return alert(`คำร้อง #REQ-${reqId} ไม่ได้อยู่ในสถานะกำลังปฏิบัติงาน`);
 
   openCheckoutAuditPanel(reqId);
 }
 
 function openCheckoutAuditPanel(reqId) {
-  const req = db.REQUESTS.find(r => r.request_id === reqId);
+  const req = db.requests.find(r => r.request_id === reqId);
   if (!req || req.status !== "CHECKED_IN") return alert("คำร้องนี้ไม่ได้อยู่ในสถานะกำลังปฏิบัติงาน");
 
   const panel = document.getElementById("checkoutAuditPanel");
@@ -433,11 +480,11 @@ function openCheckoutAuditPanel(reqId) {
   document.getElementById("auditRequestId").value = reqId;
 
   document.getElementById("auditRequestSummary").innerHTML = `
-    <strong>คำร้อง #REQ-${reqId}:</strong> ${req.purpose} | ผู้ขอ: ${db.USERS.find(u => u.user_id === req.requester_id)?.name || 'N/A'}
+    <strong>คำร้อง #REQ-${reqId}:</strong> ${req.purpose} | ผู้ขอ: ${db.users.find(u => u.user_id === req.requester_id)?.name || 'N/A'}
   `;
 
   const tbody = document.getElementById("auditEquipmentsTableBody");
-  const equips = db.EQUIPMENTS.filter(e => e.request_id === reqId);
+  const equips = db.equipments.filter(e => e.request_id === reqId);
 
   tbody.innerHTML = equips.map(e => `
     <tr>
@@ -470,65 +517,68 @@ function hideAuditPanel() {
   document.getElementById("checkoutAuditPanel").classList.add("hidden");
 }
 
-function handleSaveExitAudit(e) {
+async function handleSaveExitAudit(e) {
   e.preventDefault();
 
   const reqId = parseInt(document.getElementById("auditRequestId").value);
-  const req = db.REQUESTS.find(r => r.request_id === reqId);
+  const req = db.requests.find(r => r.request_id === reqId);
   const remarks = document.getElementById("auditRemarks").value;
   const condCheck = document.getElementById("conditionalAuditCheck").value;
 
   let hasDiscrepancy = false;
 
-  document.querySelectorAll("#auditEquipmentsTableBody tr").forEach(r => {
-    const input = r.querySelector(".audit-qty-out");
-    const equipId = parseInt(input.getAttribute("data-equip-id"));
-    const qtyOut = parseInt(input.value) || 0;
-    const status = r.querySelector(".audit-equip-status").value;
+  try {
+    for (const r of document.querySelectorAll("#auditEquipmentsTableBody tr")) {
+      const input = r.querySelector(".audit-qty-out");
+      const equipId = parseInt(input.getAttribute("data-equip-id"));
+      const qtyOut = parseInt(input.value) || 0;
+      const status = r.querySelector(".audit-equip-status").value;
 
-    const eq = db.EQUIPMENTS.find(e => e.equip_id === equipId);
-    if (eq) {
-      eq.quantity_out = qtyOut;
-      eq.status = status;
-      if (qtyOut !== eq.quantity_in && status !== "LEFT_INSIDE") {
-        hasDiscrepancy = true;
+      const eq = db.equipments.find(e => e.equip_id === equipId);
+      if (eq) {
+        if (qtyOut !== eq.quantity_in && status !== "LEFT_INSIDE") {
+          hasDiscrepancy = true;
+        }
+        await _supabase.from('equipments').update({ quantity_out: qtyOut, status: status }).eq('equip_id', equipId);
       }
     }
-  });
 
-  if (req.purpose_category !== "GENERAL_SERVICE" && condCheck === "FAILED") {
-    hasDiscrepancy = true;
+    if (req.purpose_category !== "GENERAL_SERVICE" && condCheck === "FAILED") {
+      hasDiscrepancy = true;
+    }
+
+    const accessLog = db.access_logs.find(l => l.request_id === reqId && !l.exit_time);
+    if (accessLog) {
+      await _supabase.from('access_logs').update({ exit_time: new Date().toLocaleTimeString("th-TH") }).eq('log_id', accessLog.log_id);
+    }
+
+    const auditResult = hasDiscrepancy ? "DISCREPANCY_FLAGGED" : "PASSED";
+    await _supabase.from('checkout_audits').insert([{
+      request_id: reqId,
+      checker_id: currentUser ? currentUser.user_id : 103,
+      audit_result: auditResult,
+      remarks: remarks || (hasDiscrepancy ? "พบอุปกรณ์ไม่ครบถ้วนตามรายการแจ้งเข้า" : "ตรวจสอบอุปกรณ์และเวลาออกเรียบร้อย"),
+      audit_time: new Date().toLocaleString("th-TH")
+    }]);
+
+    const finalStatus = hasDiscrepancy ? "FLAGGED" : "CLOSED";
+    await _supabase.from('requests').update({ status: finalStatus }).eq('request_id', reqId);
+
+    await loadDatabaseFromSupabase();
+    hideAuditPanel();
+
+    if (hasDiscrepancy) {
+      alert(`คำร้อง #REQ-${reqId} ถูกบันทึกเป็นเหตุการณ์ผิดปกติ (FLAGGED)!`);
+    } else {
+      alert(`การตรวจสอบเสร็จสิ้น! ปิดคำร้อง #REQ-${reqId} สมบูรณ์`);
+    }
+
+    updateUI();
+  } catch (err) {
+    alert("❌ เกิดข้อผิดพลาด: " + err.message);
   }
-
-  const accessLog = db.ACCESS_LOGS.find(l => l.request_id === reqId && !l.exit_time);
-  if (accessLog) {
-    accessLog.exit_time = new Date().toLocaleTimeString("th-TH");
-  }
-
-  const auditResult = hasDiscrepancy ? "DISCREPANCY_FLAGGED" : "PASSED";
-  db.CHECKOUT_AUDITS.push({
-    audit_id: db.CHECKOUT_AUDITS.length + 1,
-    request_id: reqId,
-    checker_id: currentUser ? currentUser.user_id : 103,
-    audit_result: auditResult,
-    remarks: remarks || (hasDiscrepancy ? "พบอุปกรณ์ไม่ครบถ้วนตามรายการแจ้งเข้า" : "ตรวจสอบอุปกรณ์และเวลาออกเรียบร้อย"),
-    audit_time: new Date().toLocaleString("th-TH")
-  });
-
-  req.status = hasDiscrepancy ? "FLAGGED" : "CLOSED";
-  saveDatabase();
-  hideAuditPanel();
-
-  if (hasDiscrepancy) {
-    alert(`คำร้อง #REQ-${reqId} ถูกบันทึกเป็นเหตุการณ์ผิดปกติ (FLAGGED / DISCREPANCY)! เนื่องจากอุปกรณ์ขาออกไม่ตรงหรือพบข้อผิดพลาดตามเงื่อนไข`);
-  } else {
-    alert(`การตรวจสอบเสร็จสิ้น! บันทึกเวลาออกและปิดคำร้อง #REQ-${reqId} สมบูรณ์`);
-  }
-
-  updateUI();
 }
 
-// UI Render Helpers
 function updateUI() {
   renderMyRequests();
   renderApprovals();
@@ -536,8 +586,10 @@ function updateUI() {
   renderAuditsAndIncidents();
   renderErdInspector();
 
-  document.getElementById("myRequestsCount").textContent = db.REQUESTS.length;
-  document.getElementById("pendingApprovalCount").textContent = db.REQUESTS.filter(r => r.status === "PENDING").length;
+  const myReqsCountEl = document.getElementById("myRequestsCount");
+  const pendingCountEl = document.getElementById("pendingApprovalCount");
+  if(myReqsCountEl) myReqsCountEl.textContent = db.requests.length;
+  if(pendingCountEl) pendingCountEl.textContent = db.requests.filter(r => r.status === "PENDING").length;
 }
 
 function getStatusBadge(status) {
@@ -563,8 +615,9 @@ function renderMyRequests() {
   }
 
   const tbody = document.getElementById("myRequestsTableBody");
-  tbody.innerHTML = db.REQUESTS.map(r => {
-    const user = db.USERS.find(u => u.user_id === r.requester_id);
+  if(!tbody) return;
+  tbody.innerHTML = db.requests.map(r => {
+    const user = db.users.find(u => u.user_id === r.requester_id);
     return `
       <tr>
         <td><strong>#REQ-${r.request_id}</strong></td>
@@ -572,7 +625,7 @@ function renderMyRequests() {
         <td>${r.purpose}</td>
         <td><span class="badge badge-info">${r.purpose_category}</span></td>
         <td>${getStatusBadge(r.status)}</td>
-        <td>${r.created_at}</td>
+        <td>${r.created_at || '-'}</td>
         <td>
           ${r.status === 'APPROVED' || r.status === 'CHECKED_IN' ? 
             `<button class="btn btn-sm btn-outline" onclick="showQrModal(${r.request_id})">🔑 รหัส #REQ-${r.request_id}</button>` : 
@@ -585,7 +638,8 @@ function renderMyRequests() {
 
 function renderApprovals() {
   const tbody = document.getElementById("approvalsTableBody");
-  const pendings = db.REQUESTS.filter(r => r.status === "PENDING");
+  if(!tbody) return;
+  const pendings = db.requests.filter(r => r.status === "PENDING");
 
   if (pendings.length === 0) {
     tbody.innerHTML = `<tr><td colspan="7" class="text-center text-sm">ไม่มีรายการคำร้องที่รอการอนุมัติในขณะนี้</td></tr>`;
@@ -593,9 +647,9 @@ function renderApprovals() {
   }
 
   tbody.innerHTML = pendings.map(r => {
-    const user = db.USERS.find(u => u.user_id === r.requester_id);
-    const visitors = db.VISITORS.filter(v => v.request_id === r.request_id);
-    const equips = db.EQUIPMENTS.filter(e => e.request_id === r.request_id);
+    const user = db.users.find(u => u.user_id === r.requester_id);
+    const visitors = db.visitors.filter(v => v.request_id === r.request_id);
+    const equips = db.equipments.filter(e => e.request_id === r.request_id);
 
     return `
       <tr>
@@ -622,13 +676,14 @@ function renderApprovals() {
 
 function renderGatekeeperTerminal() {
   const select = document.getElementById("quickSelectScanRequest");
-  const approvedOrInside = db.REQUESTS.filter(r => r.status === "APPROVED" || r.status === "CHECKED_IN");
+  if(!select) return;
+  const approvedOrInside = db.requests.filter(r => r.status === "APPROVED" || r.status === "CHECKED_IN");
 
   select.innerHTML = `<option value="">-- เลือกจากรายการที่อนุมัติแล้ว --</option>` + 
     approvedOrInside.map(r => `<option value="REQ-${r.request_id}">#REQ-${r.request_id} [${r.status}] - ${r.purpose.substring(0, 25)}...</option>`).join("");
 
   const tbody = document.getElementById("insideRoomTableBody");
-  const insiders = db.REQUESTS.filter(r => r.status === "CHECKED_IN");
+  const insiders = db.requests.filter(r => r.status === "CHECKED_IN");
 
   if (insiders.length === 0) {
     tbody.innerHTML = `<tr><td colspan="5" class="text-center text-sm">ขณะนี้ไม่มีบุคคลอยู่ภายในห้อง Data Center</td></tr>`;
@@ -636,9 +691,9 @@ function renderGatekeeperTerminal() {
   }
 
   tbody.innerHTML = insiders.map(r => {
-    const user = db.USERS.find(u => u.user_id === r.requester_id);
-    const log = db.ACCESS_LOGS.find(l => l.request_id === r.request_id && !l.exit_time);
-    const equips = db.EQUIPMENTS.filter(e => e.request_id === r.request_id);
+    const user = db.users.find(u => u.user_id === r.requester_id);
+    const log = db.access_logs.find(l => l.request_id === r.request_id && !l.exit_time);
+    const equips = db.equipments.filter(e => e.request_id === r.request_id);
 
     return `
       <tr>
@@ -647,9 +702,7 @@ function renderGatekeeperTerminal() {
         <td><span class="text-cyan">${log ? log.entry_time : '-'}</span></td>
         <td>${equips.length} รายการ</td>
         <td>
-          <button class="btn btn-sm btn-danger" onclick="openCheckoutAuditPanel(${r.request_id})">
-            ตรวจนับ & ออกห้อง
-          </button>
+          <button class="btn btn-sm btn-danger" onclick="openCheckoutAuditPanel(${r.request_id})">ตรวจนับ & ออกห้อง</button>
         </td>
       </tr>
     `;
@@ -657,20 +710,24 @@ function renderGatekeeperTerminal() {
 }
 
 function renderAuditsAndIncidents() {
-  document.getElementById("statTotalRequests").textContent = db.REQUESTS.length;
-  document.getElementById("statClosedRequests").textContent = db.REQUESTS.filter(r => r.status === "CLOSED").length;
-  document.getElementById("statIncidents").textContent = db.REQUESTS.filter(r => r.status === "FLAGGED").length;
+  const totalReqEl = document.getElementById("statTotalRequests");
+  const closedReqEl = document.getElementById("statClosedRequests");
+  const incidentsEl = document.getElementById("statIncidents");
+  if(totalReqEl) totalReqEl.textContent = db.requests.length;
+  if(closedReqEl) closedReqEl.textContent = db.requests.filter(r => r.status === "CLOSED").length;
+  if(incidentsEl) incidentsEl.textContent = db.requests.filter(r => r.status === "FLAGGED").length;
 
   const tbody = document.getElementById("checkoutAuditsTableBody");
-  tbody.innerHTML = db.CHECKOUT_AUDITS.map(a => `
+  if(!tbody) return;
+  tbody.innerHTML = db.checkout_audits.map(a => `
     <tr>
       <td><strong>AUD-${a.audit_id}</strong></td>
       <td>#REQ-${a.request_id}</td>
-      <td>${db.USERS.find(u => u.user_id === a.checker_id)?.name || 'Gatekeeper'}</td>
+      <td>${db.users.find(u => u.user_id === a.checker_id)?.name || 'Gatekeeper'}</td>
       <td>
         ${a.audit_result === 'PASSED' ? 
           `<span class="badge badge-approved">PASSED</span>` : 
-          `<span class="badge badge-flagged"> DISCREPANCY / FLAGGED</span>`}
+          `<span class="badge badge-flagged">DISCREPANCY / FLAGGED</span>`}
       </td>
       <td>${a.remarks}</td>
       <td>${a.audit_time}</td>
@@ -678,17 +735,18 @@ function renderAuditsAndIncidents() {
   `).join("");
 }
 
-// ERD Live Inspector
 function showErdTable(tableName) {
   selectedErdTable = tableName;
   document.querySelectorAll(".erd-tab-btn").forEach(btn => {
-    btn.classList.toggle("active", btn.textContent === tableName);
+    btn.classList.toggle("active", btn.textContent.toLowerCase() === tableName.toLowerCase());
   });
   renderErdInspector();
 }
 
 function renderErdInspector() {
-  document.getElementById("erdTableName").textContent = `TABLE: ${selectedErdTable}`;
+  const tableNameEl = document.getElementById("erdTableName");
+  if(!tableNameEl) return;
+  tableNameEl.textContent = `TABLE: ${selectedErdTable.toUpperCase()}`;
   const data = db[selectedErdTable] || [];
   document.getElementById("erdTableCount").textContent = `${data.length} records`;
 
@@ -708,7 +766,6 @@ function renderErdInspector() {
   `).join("");
 }
 
-// Request Code Modal
 function showQrModal(reqId) {
   const modal = document.getElementById("qrModal");
   modal.classList.remove("hidden");
