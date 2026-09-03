@@ -1,0 +1,12 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "runServer",
+      "type": "shell",
+      "command": "./run_app.bat",
+      "isBackground": true,
+      "problemMatcher": []
+    }
+  ]
+}
